@@ -1,14 +1,6 @@
-# Reactive for Nodejs
+# Reactive
 
-Reactive custom class for Nodejs, inspired by Vuejs with no dependencies.
-
-**Problem**
-
-There is no reactivity for Nodejs. Also no classes in JavaScript, everything is built on prototypes. This creates design problems that lead to larger code and lack of structure. 
-
-**Solution**
-
-Using `Reactive.js`, you can create a class and mixins to it, values will be reactive for all components. Able to clearly separate the logic `data`, `methods`, `watch` and `mounted()`, which is called for all components.
+Reactive custom class, inspired by Vuejs with no dependencies.
 
 ## How to use
 

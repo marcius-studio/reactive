@@ -7,78 +7,110 @@
 
 class Observer {
 	constructor() {
-		this.observers = []
+		this.observers = [];
 	}
 	subscribe(fn) {
-		this.observers.push(fn)
+		this.observers.push(fn);
 	}
 	unsubscribe(fn) {
-		this.observers = this.observers.filter((subscriber) => subscriber !== fn)
+		this.observers = this.observers.filter((subscriber) => subscriber !== fn);
 	}
 	next(data) {
-		this.observers.forEach((subscriber) => subscriber(data))
+		this.observers.forEach((subscriber) => subscriber(data));
 	}
 }
-
-const observer = new Observer()
 
 // root class
-export default class Reactive {
-	constructor({ mixins = [], data = {}, methods = {}, watch = {}, mounted }) {
-		const root = this.setMixins({ data, methods, watch }, mixins)
-		this.setKeys(root)
+class Reactive extends Observer {
+	constructor({ mixins = [], mounted, ...root }) {
+		super();
 
-		this.setData(this.data)
-		this.setData(this.data, true) // root data this.data.name => this.name
+		const { data, watch, methods } = this.mix([root, ...mixins]); // mix components
 
-		this.setWatcher()
-		this.setMounted([{ mounted }, ...mixins])
+		this.initData(data); // root data this.data.name => this.name
+		this.watch = this.initWatch(this, watch);
+		this.initWatcher();
 
-		// Syntactic Sugar
-		// this.setKeys(this.data);
-		this.setKeys(this.methods)
+		const _methods = this.initMethods(methods);
+
+		Object.assign(this, _methods);
+
+		this.initMounted(this, [{ mounted }, ...mixins]);
 	}
 
-	// combine root + mixins in one object
+	/**
+	 * Mixing root and mixins properties
+	 * @returns {Object} => { data,watch,methods }
+	 */
 
-	setMixins(root, mixins) {
-		return Object.keys(root).reduce((p, key) => {
-			const obj = mixins.reduce((a, c) => ({ ...a[key], ...c[key] }), {})
-			p[key] = { ...root[key], ...obj }
-			return p
-		}, {})
+	mix(mixins) {
+		return ["data", "watch", "methods"].reduce((p, key) => {
+			const obj = mixins.reduce((a, c) => ({ ...a, ...c[key] }), {});
+			p[key] = { ...p[key], ...obj };
+			return p;
+		}, {});
 	}
 
-	// add get(), set() to data options
+	/**
+	 * Add get() and set() to variables and apply to root
+	 */
 
-	setData(data, root) {
+	initData(data) {
 		Object.keys(data).forEach((key) => {
 			// выполняем этот код для каждого свойства объекта data
-			let internalValue = data[key]
-			let oldVal = internalValue
-			Object.defineProperty(root ? this : data, key, {
+			let val = data[key];
+			let oldVal = val;
+
+			Object.defineProperty(this, key, {
 				get() {
-					return internalValue
+					return val;
 				},
 				set(newVal) {
-					if (internalValue !== newVal) oldVal = internalValue;
-					internalValue = newVal
-
-					observer.next({ key, newVal, oldVal })
+					if (val !== newVal) oldVal = val;
+					val = newVal;
+					this.next({ key, val, oldVal });
 				}
-			})
+			});
 		});
 	}
-	setKeys(data) {
-		Object.keys(data).forEach((key) => (this[key] = data[key]))
+
+	/**
+	 ** Apply this to each watch function
+	 */
+
+	initWatch(vm, watch) {
+		return Object.keys(watch).reduce((p, key) => {
+			p[key] = watch[key].bind(vm);
+			return p;
+		}, {});
 	}
-	setWatcher() {
-		observer.subscribe(({ key, newVal, oldVal }) => {
-			if (this.watch[key]) this.watch[key](newVal, oldVal)
-		})
+
+	/**
+	 ** Emit fn when variable changed
+	 * observer.next() => observer.subscribe()
+	 */
+
+	initWatcher() {
+		this.subscribe(({ key, val, oldVal }) => {
+			if (this.watch[key]) this.watch[key](val, oldVal);
+		});
 	}
-	setMounted(arr = []) {
-		const test = arr.filter((i) => i.mounted).map((i) => i.mounted)
-		test.forEach((i) => i())
+
+	initMethods(methods) {
+		return Object.keys(methods).reduce((p, key) => {
+			p[key] = methods[key].bind(this);
+			return p;
+		}, {});
+	}
+
+	/*
+	 * Mix mounted fn in array, bind "this" and run
+	 */
+
+	initMounted(vm, arr = []) {
+		const fns = arr.filter((i) => i.mounted).map((i) => i.mounted);
+		fns.map((fn) => fn.bind(vm)).forEach((i) => i());
 	}
 }
+
+export default Reactive
